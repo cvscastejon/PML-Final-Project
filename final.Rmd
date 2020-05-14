@@ -1,0 +1,146 @@
+---
+title: "PML Course Project"
+author: "Me"
+date: "13/05/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warnings = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+## Executive Summmary
+
+This is an analysis on data collected by wearable devices with accelerometers and gyroscopes to predict the type of exercise being performed.
+
+## Data Collection
+
+```{r cars}
+trainingUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(trainingUrl, destfile = "training.csv")
+download.file(testingUrl, destfile = "testing.csv")
+
+training <- read.csv("training.csv")
+testing <- read.csv("testing.csv")
+```
+
+## Exploratory Data Analysis
+
+### Variable Selection
+
+The first step in developing a model is to select the variables which will be used. Many of the variables consist of NA values or are empty. Also, there are time related variables which are not relevant in this context so they were also removed. All transformations were made on both testing and training datasets.
+
+```{r }
+#Checking NA columns
+sumNa <- numeric()
+for(i in 1:length(names(training))){
+  sumNa[i] <- sum(is.na(training[,i])*1)
+}
+
+#Eliminating NA columns
+j <- 0
+naVar <- integer()
+for(i in 1:length(names(training))){
+  if(sumNa[i] == 19216){
+    j <- j + 1
+    naVar[j] <- i
+  }
+}
+trainingBase<- training[,-naVar]
+testing <- testing[,-naVar]
+
+#Checking empty columns
+sumEmpty<- numeric()
+for(i in 1:length(names(trainingBase))){
+  sumEmpty[i] <- sum((trainingBase[,i] == "")*1)
+}
+
+#Eliminating Empty columns
+j <- 0
+emptyVar <- integer()
+for(i in 1:length(names(trainingBase))){
+  if(sumEmpty[i] == 19216){
+    j <- j + 1
+    emptyVar[j] <- i
+  }
+}
+trainingBase <- trainingBase[,-emptyVar]
+testing <- testing[,-emptyVar]
+
+#Eliminating Non-related columns
+trainingBase<- trainingBase[,-c(1,3,4,5,6,7)]
+testing<- testing[,-c(1,3,4,5,6,7)]
+```
+
+## Cross Validation Method
+
+To cross validate our method we will use a simple cross validation method. To do that, we split the `trainingBase` database into two:
+
+ - `training`
+ 
+ - `validation`
+ 
+The `trainingBase` database is split in half using the caret package.
+
+```{r }
+library(caret)
+train <- createDataPartition(trainingBase$classe, p = 0.5, list = FALSE)
+training <- trainingBase[train,]
+validation <- trainingBase[-train,]
+```
+
+## Model Selection
+
+For the model selection we will try two different popular algorithms and pick the one with the highest validation accuracy. Naturally, the model will be built using only the training observations.
+
+### Model 1: Random Forests
+
+The first attempt will be done using the random forest algorithm
+
+```{r}
+library(randomForest)
+modRf <- randomForest(classe~.,training)
+```
+
+Now we test the model accuracy
+```{r}
+predRf <- predict(modRf,validation)
+sum((predRf == validation$classe)*1)/length(predRf)
+```
+
+As we can see the accuracy og the model is very high, but we will try other models nonetheless.
+
+### Model 2: Boosting
+
+The second model will be the adabag of boosting, which is non linear, like random forests and also very popular
+```{r}
+library(adabag)
+modBs <- boosting(classe~.,training, mfinal = 20)
+```
+
+Now we test its accuracy in the validation set
+```{r}
+predBs <- predict.boosting(modBs,validation)
+1 - predBs$error
+```
+
+The accuraccy is very good, but still lower than the Random Forests Method
+
+### Chosen Model: Random Forest
+
+As seen before, the Random Forest method gave the most accurate result with in the validation, with a sample error rate of just: `r 1 -  0.9920489`.
+
+## Prediction on Test Set
+
+Finally, the last step of this report is to predict the outcome of the testing set
+
+```{r}
+predTest <- predict(modRf,testing)
+print(predTest)
+```
